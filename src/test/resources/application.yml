@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: PgcrBatchProcessor
+  jpa:
+    hibernate:
+      ddl-auto: none
+  batch:
+    jdbc:
+      initialize-schema: always
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: prometheus
+
+bungie:
+  api:
+    key: ${BUNGIE_API_KEY}

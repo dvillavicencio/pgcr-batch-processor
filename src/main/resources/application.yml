@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: PgcrBatchProcessor
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 50
+  jpa:
+    hibernate:
+      ddl-auto: none
+  batch:
+    jdbc:
+      initialize-schema: always
+    job:
+      enabled: false
+  threads:
+    virtual:
+      enabled: true
+
+
+bungie:
+  api:
+    baseUrl: https://www.bungie.net/Platform
+    key: ${BUNGIE_API_KEY}
+
+server:
+  port: 8082
