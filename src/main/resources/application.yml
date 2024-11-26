@@ -24,6 +24,3 @@ bungie:
   api:
     baseUrl: https://www.bungie.net/Platform
     key: ${BUNGIE_API_KEY}
-
-server:
-  port: 8082

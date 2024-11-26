@@ -17,6 +17,10 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -31,6 +35,35 @@ import org.springframework.util.CollectionUtils;
 @Component
 public class PgcrProcessor implements
     ItemProcessor<PostGameCarnageReport, ProcessedRaidPGCR> {
+
+  private static final Long SOTP_HASH_1 = 548750096L;
+  private static final Long SOTP_HASH_2 = 2812525063L;
+
+  private static final Instant BEYOND_LIGHT_RELEASE = Instant.from(ZonedDateTime.of(
+      LocalDate.of(2020, 11, 10),
+      LocalTime.of(9, 0, 0),
+      ZoneId.of("America/Los_Angeles"))
+  );
+  private static final Instant WITCH_QUEEN_RELEASE = Instant.from(ZonedDateTime.of(
+      LocalDate.of(2022, 2, 22),
+      LocalTime.of(9, 0, 0),
+      ZoneId.of("America/Los_Angeles")
+  ));
+  private static final Instant SEASON_OF_HAUNTED_RELEASE = Instant.from(ZonedDateTime.of(
+      LocalDate.of(2022, 5, 24),
+      LocalTime.of(9, 0, 0),
+      ZoneId.of("America/Los_Angeles")
+  ));
+
+  private static final Set<Long> LEVI_HASHES = Set.of(
+      2693136600L, 2693136601L, 2693136602L,
+      2693136603L, 2693136604L, 2693136605L,
+      89727599L, 287649202L, 1699948563L, 1875726950L,
+      3916343513L, 4039317196L, 417231112L, 508802457L,
+      757116822L, 771164842L, 1685065161L, 1800508819L,
+      2449714930L, 3446541099L, 4206123728L, 3912437239L,
+      3879860661L, 3857338478L
+  );
 
   private final Counter raidPgcrCounter;
   private final Counter nonRaidPgcrCounter;
@@ -48,6 +81,36 @@ public class PgcrProcessor implements
     this.redisTemplate = redisTemplate;
   }
 
+  /**
+   * Figure out if the activity was started from the beginning. There's additional logic to this
+   * because of how PGCRs have changed over time. Credits to Newo for explaining this to me
+   *
+   * @param item the PGCR to process
+   * @return true or false
+   */
+  private static Boolean resolveFromBeginning(PostGameCarnageReport item, Boolean flawless) {
+    if (item.period().isAfter(SEASON_OF_HAUNTED_RELEASE)) {
+      return item.activityWasStartedFromBeginning();
+    } else if (item.period().isBefore(BEYOND_LIGHT_RELEASE)) {
+      if (item.startingPhaseIndex() == null) {
+        return false;
+      }
+      if (item.activityDetails().directorActivityHash().equals(SOTP_HASH_1)
+          || item.activityDetails().directorActivityHash().equals(SOTP_HASH_2)) {
+        return item.startingPhaseIndex() <= 1;
+      } else if (LEVI_HASHES.contains(item.activityDetails().directorActivityHash())) {
+        return item.startingPhaseIndex() == 0 || item.startingPhaseIndex() == 1;
+      } else {
+        return item.startingPhaseIndex() == 0;
+      }
+    } else if (item.period().isAfter(WITCH_QUEEN_RELEASE) && (item.activityWasStartedFromBeginning()
+        || flawless)) {
+      return item.activityWasStartedFromBeginning();
+    } else {
+      return false;
+    }
+  }
+
   @Override
   public ProcessedRaidPGCR process(PostGameCarnageReport item) {
     if (item.activityDetails().mode() != 4) {
@@ -62,7 +125,6 @@ public class PgcrProcessor implements
             : (Integer) item.entries().get(0).values().activityDurationSeconds();
     Instant endTime = item.entries().isEmpty() ? startTime :
         startTime.plus(Duration.ofSeconds(activityDuration));
-    Boolean fromBeginning = item.activityWasStartedFromBeginning();
     Long instanceId = Long.valueOf(item.activityDetails().instanceId());
 
     ManifestResponse manifestResponse = redisTemplate.opsForValue()
@@ -105,6 +167,7 @@ public class PgcrProcessor implements
     var duo = uniquePlayerCount == 2;
     var solo = uniquePlayerCount == 1;
 
+    Boolean fromBeginning = resolveFromBeginning(item, flawless);
     raidPgcrCounter.increment();
     return new ProcessedRaidPGCR(startTime, endTime, fromBeginning,
         instanceId, raidName, raidDifficulty, activityHash, flawless, solo, duo, trio, players);

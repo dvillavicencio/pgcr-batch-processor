@@ -8,6 +8,7 @@ import java.util.List;
 
 public record PostGameCarnageReport(
     Instant period,
+    Integer startingPhaseIndex,
     Boolean activityWasStartedFromBeginning,
     ActivityDetails activityDetails,
     List<PostGameCarnageReportEntry> entries) implements Serializable {
@@ -17,6 +18,7 @@ public record PostGameCarnageReport(
    */
   public static final PostGameCarnageReport EMPTY_RESPONSE = new PostGameCarnageReport(
       Instant.now(Clock.systemUTC()),
+      0,
       false,
       null,
       Collections.emptyList());
