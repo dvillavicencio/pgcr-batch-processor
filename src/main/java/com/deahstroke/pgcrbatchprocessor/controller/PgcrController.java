@@ -1,6 +1,5 @@
 package com.deahstroke.pgcrbatchprocessor.controller;
 
-import com.deahstroke.pgcrbatchprocessor.dto.ProcessedRaidPGCR;
 import com.deahstroke.pgcrbatchprocessor.service.PgcrService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +16,7 @@ public class PgcrController {
   }
 
   @GetMapping("/{pgcrId}")
-  public ResponseEntity<ProcessedRaidPGCR> getPGCR(@PathVariable Long pgcrId) {
+  public ResponseEntity<String> getPGCR(@PathVariable Long pgcrId) {
     return ResponseEntity.ok(pgcrService.getPGCR(pgcrId));
   }
 

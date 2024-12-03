@@ -1,0 +1,23 @@
+services:
+  grafana:
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    image: grafana/grafana-oss
+    networks:
+      - grafana-prometheus
+  prometheus:
+    container_name: "prometheus"
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - grafana-config:/etc/grafana/grafana.ini
+    networks:
+      - grafana-prometheus
+
+networks:
+  grafana-prometheus:
+
+volumes:
+  grafana-config:

@@ -49,7 +49,7 @@ public class RaidPgcrStep {
 
   private static final String RESOURCE_DIRECTORY = "/Volumes/T7 Shield/Bungo Stuff/bungo-pgcr/bungo-pgcr/";
   private static final Integer MAX_SIZE_FOR_PGCR = 128 * 1024 * 1024;
-  private static final Integer DEFAULT_CHUNK_SIZE = 3000;
+  private static final Integer DEFAULT_CHUNK_SIZE = 6000;
 
   private StepExecutionListener afterPgcrStepListener() {
     return new StepExecutionListener() {
@@ -80,6 +80,7 @@ public class RaidPgcrStep {
   @Bean
   public StepExecutionListener statusStepListener(MeterRegistry meterRegistry) {
     return new StepExecutionListener() {
+
       @Override
       public void beforeStep(StepExecution stepExecution) {
         meterRegistry.counter("spring_batch_step_status",
@@ -102,7 +103,7 @@ public class RaidPgcrStep {
   @Bean
   public TaskExecutor masterThreadExecutor() {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(8);
+    executor.setCorePoolSize(10);
     executor.setMaxPoolSize(12);
     executor.setThreadNamePrefix("Partitioned-Step-");
     executor.initialize();
@@ -147,8 +148,13 @@ public class RaidPgcrStep {
         .listener(afterPgcrStepListener())
         .listener(statusStepListener)
         .faultTolerant()
-        .skipPolicy(((t, skipCount) ->
-            t instanceof LineTooLargeException || t instanceof FlatFileParseException))
+        .skipPolicy((t, skipCount) -> {
+          if (t instanceof LineTooLargeException || t instanceof FlatFileParseException) {
+            skipCount++;
+            return true;
+          }
+          return false;
+        })
         .meterRegistry(meterRegistry)
         .build();
   }

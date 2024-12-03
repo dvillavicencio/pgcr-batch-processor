@@ -19,8 +19,13 @@ spring:
     virtual:
       enabled: true
 
-
 bungie:
   api:
     baseUrl: https://www.bungie.net/Platform
     key: ${BUNGIE_API_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus
