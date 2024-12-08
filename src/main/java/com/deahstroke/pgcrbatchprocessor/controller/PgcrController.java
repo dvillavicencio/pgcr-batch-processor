@@ -16,7 +16,7 @@ public class PgcrController {
   }
 
   @GetMapping("/{pgcrId}")
-  public ResponseEntity<String> getPGCR(@PathVariable Long pgcrId) {
+  public ResponseEntity<Object> getPGCR(@PathVariable Long pgcrId) {
     return ResponseEntity.ok(pgcrService.getPGCR(pgcrId));
   }
 

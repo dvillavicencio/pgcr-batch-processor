@@ -21,11 +21,17 @@ public class AsyncJobRunnerService {
   private final JobLauncher jobLauncher;
   private final JobOperator jobOperator;
   private final Job pgcrJob;
+  private final Job playerJob;
 
-  public AsyncJobRunnerService(JobLauncher jobLauncher, JobOperator jobOperator, Job pgcrJob) {
+  public AsyncJobRunnerService(
+      JobLauncher jobLauncher,
+      JobOperator jobOperator,
+      Job pgcrJob,
+      Job playerJob) {
     this.jobLauncher = jobLauncher;
     this.jobOperator = jobOperator;
     this.pgcrJob = pgcrJob;
+    this.playerJob = playerJob;
   }
 
   @Async
@@ -36,8 +42,14 @@ public class AsyncJobRunnerService {
   }
 
   @Async
-  public void stopJobAsync(Integer jobNumber)
+  public void stopJobAsync(Integer jobExecutionId)
       throws NoSuchJobExecutionException, JobExecutionNotRunningException {
-    jobOperator.stop(jobNumber);
+    jobOperator.stop(jobExecutionId);
+  }
+
+  @Async
+  public void runPlayerJobAsync()
+      throws JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+    jobLauncher.run(playerJob, new JobParameters());
   }
 }

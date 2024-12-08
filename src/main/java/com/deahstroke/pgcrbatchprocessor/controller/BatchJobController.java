@@ -25,18 +25,26 @@ public class BatchJobController {
   }
 
   @PostMapping("/batch/pgcr/run/{jobNumber}")
-  public ResponseEntity<Void> handle(@PathVariable Integer jobNumber)
+  public ResponseEntity<Void> startPgcrProcessing(@PathVariable Integer jobNumber)
       throws JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
     log.info("Starting PGCR batch processing with Id [{}]", jobNumber);
     asyncJobRunnerService.runJobAsync(jobNumber);
     return ResponseEntity.noContent().build();
   }
 
-  @DeleteMapping("/batch/pgcr/run/{jobNumber}")
+  @DeleteMapping("/batch/stop/{jobNumber}")
   public ResponseEntity<Void> delete(@PathVariable Integer jobNumber)
       throws NoSuchJobExecutionException, JobExecutionNotRunningException {
     log.info("Stopping PGCR batch job with Id [{}]", jobNumber);
     asyncJobRunnerService.stopJobAsync(jobNumber);
+    return ResponseEntity.noContent().build();
+  }
+
+  @PostMapping("/batch/player/run")
+  public ResponseEntity<Void> startPlayerProcessing()
+      throws JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+    log.info("Starting player batch processing");
+    asyncJobRunnerService.runPlayerJobAsync();
     return ResponseEntity.noContent().build();
   }
 }

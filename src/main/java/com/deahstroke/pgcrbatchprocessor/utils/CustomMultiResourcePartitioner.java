@@ -21,6 +21,7 @@ public class CustomMultiResourcePartitioner implements Partitioner {
         ExecutionContext context = new ExecutionContext();
         Assert.state(resource.exists(), "Resource does not exist: " + resource);
         context.putString("filename", resource.getFilename());
+        context.putString("stepName", "worker-step-" + i);
         contexts.put(String.valueOf(i), context);
         i++;
       }

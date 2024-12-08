@@ -16,13 +16,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.ExitStatus;
+import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.partition.PartitionHandler;
 import org.springframework.batch.core.partition.support.Partitioner;
 import org.springframework.batch.core.partition.support.TaskExecutorPartitionHandler;
@@ -44,8 +47,9 @@ import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
-@Slf4j
 public class RaidPgcrStep {
+
+  private static final Logger log = LoggerFactory.getLogger(RaidPgcrStep.class);
 
   private static final String RESOURCE_DIRECTORY = "/Volumes/T7 Shield/Bungo Stuff/bungo-pgcr/bungo-pgcr/";
   private static final Integer MAX_SIZE_FOR_PGCR = 128 * 1024 * 1024;
@@ -91,6 +95,8 @@ public class RaidPgcrStep {
 
       @Override
       public ExitStatus afterStep(StepExecution stepExecution) {
+        log.info("Worker step [{}}] is processing file [{}]", stepExecution.getStepName(),
+            stepExecution.getExecutionContext().getString("filename"));
         String status = stepExecution.getExitStatus().getExitCode();
         meterRegistry.counter("spring_batch_step_status",
                 Tags.of("step", stepExecution.getStepName(), "status", status))
@@ -103,11 +109,19 @@ public class RaidPgcrStep {
   @Bean
   public TaskExecutor masterThreadExecutor() {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(10);
-    executor.setMaxPoolSize(12);
+    executor.setCorePoolSize(15);
+    executor.setMaxPoolSize(20);
     executor.setThreadNamePrefix("Partitioned-Step-");
     executor.initialize();
     return executor;
+  }
+
+  @Bean
+  public Job pgcrJob(JobRepository jobRepository,
+      Step pgcrProcessingStep) {
+    return new JobBuilder("pgcrPartitioningProcessingJob", jobRepository)
+        .start(pgcrProcessingStep)
+        .build();
   }
 
   @Bean
@@ -126,7 +140,7 @@ public class RaidPgcrStep {
       TaskExecutor masterThreadExecutor) {
     TaskExecutorPartitionHandler handler = new TaskExecutorPartitionHandler();
     handler.setStep(pgcrWorkerStep);
-    handler.setGridSize(12);
+    handler.setGridSize(20);
     handler.setTaskExecutor(masterThreadExecutor);
     return handler;
   }

@@ -3,6 +3,7 @@ package com.deahstroke.pgcrbatchprocessor.service;
 import com.deahstroke.pgcrbatchprocessor.repository.RaidPgcrRepository;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.util.zip.GZIPInputStream;
 import org.springframework.stereotype.Service;
@@ -16,14 +17,14 @@ public class PgcrService {
     this.raidPgcrRepository = raidPgcrRepository;
   }
 
-  public String getPGCR(Long pgcrId) {
+  public Object getPGCR(Long pgcrId) {
     var pgcr = raidPgcrRepository.getReferenceById(pgcrId);
     try (
         ByteArrayInputStream bais = new ByteArrayInputStream(pgcr.getBlob());
         GZIPInputStream gzipInputStream = new GZIPInputStream(bais);
-        ObjectInputStream objectInputStream = new ObjectInputStream(gzipInputStream)
+        ObjectInputStream ois = new ObjectInputStream(gzipInputStream)
     ) {
-      return (String) objectInputStream.readObject();
+      return ois.readObject();
     } catch (IOException | ClassNotFoundException e) {
       throw new RuntimeException(e);
     }
