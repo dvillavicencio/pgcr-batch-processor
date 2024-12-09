@@ -41,7 +41,9 @@ public class PlayerPgcrStep {
   private static final Integer DEFAULT_CHUNK_SIZE = 100;
 
   @Bean
-  public Job playerJob(JobRepository jobRepository, Step playerManagerStep) {
+  public Job playerJob(
+      JobRepository jobRepository,
+      Step playerManagerStep) {
     return new JobBuilder("playerProcessingJob", jobRepository)
         .start(playerManagerStep)
         .build();
