@@ -1,4 +1,4 @@
-# PGCRBatchProcessor
+# PGCR Batch Processor
 
 The **PGCRBatchProcessor** is a backend application that processes Post Game Carnage Reports (PGCRs) from Destiny 2, populate a database with historical player activity data.
 
