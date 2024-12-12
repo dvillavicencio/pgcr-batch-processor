@@ -44,8 +44,4 @@ public class Player {
   @ToString.Exclude
   @OneToMany(cascade = CascadeType.ALL, mappedBy = "player", orphanRemoval = true)
   private Set<PlayerCharacter> playerCharacters;
-
-  public Player merge(Player player) {
-    this.playerCharacters.addAll(player.getPlayerCharacters());
-  }
 }
