@@ -5,7 +5,7 @@ import com.deahstroke.pgcrbatchprocessor.entity.RaidPgcr;
 import com.deahstroke.pgcrbatchprocessor.exception.LineTooLargeException;
 import com.deahstroke.pgcrbatchprocessor.exception.ManifestException;
 import com.deahstroke.pgcrbatchprocessor.processor.PgcrProcessor;
-import com.deahstroke.pgcrbatchprocessor.processor.RaidPgcrItemProcessor;
+import com.deahstroke.pgcrbatchprocessor.processor.PgcrCompressingProcessor;
 import com.deahstroke.pgcrbatchprocessor.repository.RaidPgcrRepository;
 import com.deahstroke.pgcrbatchprocessor.utils.CustomBufferedReaderFactory;
 import com.deahstroke.pgcrbatchprocessor.utils.CustomMultiResourcePartitioner;
@@ -189,9 +189,9 @@ public class RaidPgcrStep {
   @Bean
   public CompositeItemProcessor<PostGameCarnageReport, RaidPgcr> pgcrCompositeProcessor(
       PgcrProcessor pgcrProcessor,
-      RaidPgcrItemProcessor raidPgcrItemProcessor) {
+      PgcrCompressingProcessor raidPgcrCompressorProcessor) {
     return new CompositeItemProcessor<>(
-        pgcrProcessor, raidPgcrItemProcessor);
+        pgcrProcessor, raidPgcrCompressorProcessor);
   }
 
   @Bean

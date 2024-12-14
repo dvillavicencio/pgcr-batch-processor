@@ -10,11 +10,11 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
 @Component
-public class RaidPgcrItemProcessor implements ItemProcessor<ProcessedRaidPGCR, RaidPgcr> {
+public class PgcrCompressingProcessor implements ItemProcessor<ProcessedRaidPGCR, RaidPgcr> {
 
   private final ObjectMapper objectMapper;
 
-  public RaidPgcrItemProcessor(ObjectMapper objectMapper) {
+  public PgcrCompressingProcessor(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
 
