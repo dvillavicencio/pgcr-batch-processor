@@ -12,6 +12,7 @@ import com.deahstroke.pgcrbatchprocessor.dto.ProcessedRaidPGCR;
 import com.deahstroke.pgcrbatchprocessor.enums.CharacterClass;
 import com.deahstroke.pgcrbatchprocessor.enums.CharacterGender;
 import com.deahstroke.pgcrbatchprocessor.enums.CharacterRace;
+import com.deahstroke.pgcrbatchprocessor.exception.ManifestException;
 import com.deahstroke.pgcrbatchprocessor.utils.EnumUtils;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -120,25 +121,24 @@ public class PgcrProcessor implements
 
     Instant startTime = item.period();
     int activityDuration =
-        (item.entries().get(0).values().activityDurationSeconds() instanceof Basic duration)
+        (item.entries().getFirst().values().activityDurationSeconds() instanceof Basic duration)
             ? Integer.parseInt(duration.displayValue())
-            : (Integer) item.entries().get(0).values().activityDurationSeconds();
-    Instant endTime = item.entries().isEmpty() ? startTime :
-        startTime.plus(Duration.ofSeconds(activityDuration));
+            : (Integer) item.entries().getFirst().values().activityDurationSeconds();
+    Instant endTime = startTime.plus(Duration.ofSeconds(activityDuration));
     Long instanceId = Long.valueOf(item.activityDetails().instanceId());
 
+    Long activityHash = item.activityDetails().directorActivityHash();
     ManifestResponse manifestResponse = redisTemplate.opsForValue()
         .get(String.valueOf(item.activityDetails().directorActivityHash()));
 
-    String raidName = "";
-    String raidDifficulty = "";
-    if (!Objects.isNull(manifestResponse) && !Objects.isNull(
-        manifestResponse.displayProperties())) {
-      String[] tokens = manifestResponse.displayProperties().name().split(":");
-      raidName = tokens[0].trim();
-      raidDifficulty = tokens.length > 1 ? tokens[1].trim() : "";
+    if (manifestResponse == null) {
+      throw new ManifestException(
+          "Could not find manifest response for hash [%s]".formatted(activityHash));
     }
-    Long activityHash = item.activityDetails().directorActivityHash();
+
+    String[] tokens = manifestResponse.displayProperties().name().split(":");
+    String raidName = tokens[0].trim();
+    String raidDifficulty = tokens.length > 1 ? tokens[1].trim() : "Normal";
 
     Set<PlayerInformation> players = new HashSet<>(item.entries().size());
     if (!item.entries().isEmpty()) {

@@ -2,13 +2,13 @@ package com.deahstroke.pgcrbatchprocessor.enums;
 
 import lombok.Getter;
 
+@Getter
 public enum CharacterRace implements Labeled {
-  Human("Human"),
-  Awoken("Awoken"),
-  Exo("Exo"),
-  Empty("Empty");
+  HUMAN("Human"),
+  AWOKEN("Awoken"),
+  EXO("Exo"),
+  EMPTY("Empty");
 
-  @Getter
   private final String label;
 
   CharacterRace(String label) {

@@ -3,6 +3,7 @@ package com.deahstroke.pgcrbatchprocessor.job;
 import com.deahstroke.pgcrbatchprocessor.dto.PostGameCarnageReport;
 import com.deahstroke.pgcrbatchprocessor.entity.RaidPgcr;
 import com.deahstroke.pgcrbatchprocessor.exception.LineTooLargeException;
+import com.deahstroke.pgcrbatchprocessor.exception.ManifestException;
 import com.deahstroke.pgcrbatchprocessor.processor.PgcrProcessor;
 import com.deahstroke.pgcrbatchprocessor.processor.RaidPgcrItemProcessor;
 import com.deahstroke.pgcrbatchprocessor.repository.RaidPgcrRepository;
@@ -162,13 +163,9 @@ public class RaidPgcrStep {
         .listener(afterPgcrStepListener())
         .listener(statusStepListener)
         .faultTolerant()
-        .skipPolicy((t, skipCount) -> {
-          if (t instanceof LineTooLargeException || t instanceof FlatFileParseException) {
-            skipCount++;
-            return true;
-          }
-          return false;
-        })
+        .noSkip(ManifestException.class)
+        .skipPolicy((t, skipCount) ->
+            t instanceof LineTooLargeException || t instanceof FlatFileParseException)
         .meterRegistry(meterRegistry)
         .build();
   }

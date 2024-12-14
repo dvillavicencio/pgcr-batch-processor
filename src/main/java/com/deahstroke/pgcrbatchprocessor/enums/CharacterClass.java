@@ -4,10 +4,10 @@ import lombok.Getter;
 
 @Getter
 public enum CharacterClass implements Labeled {
-  Titan("Titan"),
-  Warlock("Warlock"),
-  Hunter("Hunter"),
-  Empty("Empty");
+  TITAN("Titan"),
+  WARLOCK("Warlock"),
+  HUNTER("Hunter"),
+  EMPTY("Empty");
 
   private final String label;
 

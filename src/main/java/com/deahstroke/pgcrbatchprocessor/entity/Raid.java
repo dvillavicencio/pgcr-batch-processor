@@ -2,6 +2,7 @@ package com.deahstroke.pgcrbatchprocessor.entity;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
@@ -27,15 +28,8 @@ import lombok.ToString;
 @Table(name = "raid")
 public class Raid {
 
-  @Id
-  @Column(name = "raid_id")
-  private Long id;
-
-  @Column(name = "raid_name")
-  private String raidName;
-
-  @Column(name = "raid_difficulty")
-  private String raidDifficulty;
+  @EmbeddedId
+  private RaidId raidId;
 
   @Column(name = "is_active")
   private Boolean isActive;

@@ -20,7 +20,7 @@ public enum RaidName implements Labeled {
   LEVIATHAN_EATER_OF_WORLDS("Leviathan: Eater of Worlds"),
   LEVIATHAN("Leviathan");
 
-  public static Set<RaidName> SUNSET_RAIDS = Set.of(
+  public static final Set<RaidName> SUNSET_RAIDS = Set.of(
       LEVIATHAN, LEVIATHAN_EATER_OF_WORLDS, LEVIATHAN_CROWN_OF_SORROW, LEVIATHAN_SPIRE_OF_STARS,
       SCOURGE_OF_THE_PAST
   );

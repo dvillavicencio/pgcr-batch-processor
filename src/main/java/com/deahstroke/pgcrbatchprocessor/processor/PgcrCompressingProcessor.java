@@ -2,7 +2,6 @@ package com.deahstroke.pgcrbatchprocessor.processor;
 
 import com.deahstroke.pgcrbatchprocessor.dto.ProcessedRaidPGCR;
 import com.deahstroke.pgcrbatchprocessor.entity.RaidPgcr;
-import com.deahstroke.pgcrbatchprocessor.utils.ObjectBytesUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -28,7 +27,7 @@ public class RaidPgcrItemProcessor implements ItemProcessor<ProcessedRaidPGCR, R
     // Compress using Gzip
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (GZIPOutputStream gzipOs = new GZIPOutputStream(baos)) {
-      byte[] bytes = ObjectBytesUtils.objectToByteArray(item);
+      byte[] bytes = objectMapper.writeValueAsBytes(item);
       gzipOs.write(bytes);
       gzipOs.finish();
     } catch (IOException e) {

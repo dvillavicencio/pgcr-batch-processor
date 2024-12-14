@@ -1,5 +1,7 @@
 package com.deahstroke.pgcrbatchprocessor.job;
 
+import com.deahstroke.pgcrbatchprocessor.dto.CharacterWeaponInformation;
+import com.deahstroke.pgcrbatchprocessor.dto.ManifestResponse;
 import com.deahstroke.pgcrbatchprocessor.dto.PlayerInformation;
 import com.deahstroke.pgcrbatchprocessor.dto.ProcessedRaidPGCR;
 import com.deahstroke.pgcrbatchprocessor.entity.Player;
@@ -7,10 +9,19 @@ import com.deahstroke.pgcrbatchprocessor.entity.PlayerCharacter;
 import com.deahstroke.pgcrbatchprocessor.entity.PlayerRaidActivityStats;
 import com.deahstroke.pgcrbatchprocessor.entity.PlayerRaidActivityStatsId;
 import com.deahstroke.pgcrbatchprocessor.entity.PlayerRaidActivityWeaponStats;
+import com.deahstroke.pgcrbatchprocessor.entity.PlayerRaidActivityWeaponStatsId;
+import com.deahstroke.pgcrbatchprocessor.entity.PlayerRaidAggregateStats;
+import com.deahstroke.pgcrbatchprocessor.entity.PlayerRaidAggregateStatsId;
 import com.deahstroke.pgcrbatchprocessor.entity.Raid;
 import com.deahstroke.pgcrbatchprocessor.entity.RaidHash;
+import com.deahstroke.pgcrbatchprocessor.entity.RaidId;
 import com.deahstroke.pgcrbatchprocessor.entity.RaidPgcr;
+import com.deahstroke.pgcrbatchprocessor.entity.Weapon;
+import com.deahstroke.pgcrbatchprocessor.enums.EquipmentSlot;
+import com.deahstroke.pgcrbatchprocessor.enums.RaidDifficulty;
 import com.deahstroke.pgcrbatchprocessor.enums.RaidName;
+import com.deahstroke.pgcrbatchprocessor.enums.WeaponDamageType;
+import com.deahstroke.pgcrbatchprocessor.exception.RaidNotFoundException;
 import com.deahstroke.pgcrbatchprocessor.repository.PlayerRaidActivityStatsRepository;
 import com.deahstroke.pgcrbatchprocessor.repository.PlayerRaidActivityWeaponStatsRepository;
 import com.deahstroke.pgcrbatchprocessor.repository.PlayerRaidAggregateStatsRepository;
@@ -22,7 +33,9 @@ import jakarta.persistence.EntityManagerFactory;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.zip.GZIPInputStream;
 import org.springframework.batch.core.Step;
@@ -31,13 +44,19 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.JpaPagingItemReader;
+import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.util.CollectionUtils;
 
 @Configuration
 public class RaidPgcrProcessStep {
 
+  private final static String BASE_URL = "https://bungie.net";
+
+  private final RedisTemplate<String, ManifestResponse> redisTemplate;
   private final PlayerRepository playerRepository;
   private final RaidRepository raidRepository;
   private final WeaponRepository weaponRepository;
@@ -46,12 +65,14 @@ public class RaidPgcrProcessStep {
   private final PlayerRaidActivityWeaponStatsRepository playerRaidActivityWeaponStatsRepository;
 
   public RaidPgcrProcessStep(
+      RedisTemplate<String, ManifestResponse> redisTemplate,
       PlayerRepository playerRepository,
       RaidRepository raidRepository,
       WeaponRepository weaponRepository,
       PlayerRaidActivityStatsRepository playerRaidActivityStatsRepository,
       PlayerRaidAggregateStatsRepository playerRaidAggregateStatsRepository,
       PlayerRaidActivityWeaponStatsRepository playerRaidActivityWeaponStatsRepository) {
+    this.redisTemplate = redisTemplate;
     this.playerRepository = playerRepository;
     this.raidRepository = raidRepository;
     this.weaponRepository = weaponRepository;
@@ -62,7 +83,7 @@ public class RaidPgcrProcessStep {
 
 
   @Bean
-  Step raidPgcrProcessStep(JobRepository jobRepository,
+  Step overallProcessingStep(JobRepository jobRepository,
       JpaTransactionManager jpaTransactionManager,
       JpaPagingItemReader<RaidPgcr> jpaPagingItemReader,
       ItemProcessor<RaidPgcr, ProcessedRaidPGCR> raidPgcrProcessor,
@@ -77,10 +98,12 @@ public class RaidPgcrProcessStep {
 
   @Bean
   public JpaPagingItemReader<RaidPgcr> raidPgcrReader(EntityManagerFactory entityManagerFactory) {
-    JpaPagingItemReader<RaidPgcr> jpaPagingItemReader = new JpaPagingItemReader();
-    jpaPagingItemReader.setEntityManagerFactory(entityManagerFactory);
-    jpaPagingItemReader.setPageSize(500);
-    return jpaPagingItemReader;
+    return new JpaPagingItemReaderBuilder<RaidPgcr>()
+        .name("raidPgcrReader")
+        .entityManagerFactory(entityManagerFactory)
+        .pageSize(500)
+        .queryString("SELECT * FROM raid_pgcr")
+        .build();
   }
 
   @Bean
@@ -104,24 +127,29 @@ public class RaidPgcrProcessStep {
       for (ProcessedRaidPGCR raidPgcr : item) {
         processRaid(raidPgcr);
         raidPgcr.playerInformation().forEach(this::processPlayer);
-        raidPgcr.playerInformation().forEach(p -> processPlayerStats(p, raidPgcr.instanceId()));
+        raidPgcr.playerInformation().forEach(playerInfo ->
+            processPlayerStats(playerInfo, raidPgcr.instanceId()));
+        raidPgcr.playerInformation().forEach(playerInfo ->
+            processAggregateRaidStats(raidPgcr, playerInfo, raidPgcr.instanceId()));
       }
     };
   }
 
   private void processRaid(ProcessedRaidPGCR pgcr) {
-    Raid raidOptional = raidRepository.findByRaidName(pgcr.raidName()).orElseGet(() -> {
-      Raid raid = new Raid();
-      raid.setRaidDifficulty(pgcr.raidDifficulty());
-      raid.setRaidName(pgcr.raidName());
+    RaidDifficulty difficulty = RaidDifficulty.getByLabel(pgcr.raidDifficulty());
+    RaidName raidName = EnumUtils.getByLabel(RaidName.class, pgcr.raidName());
+    RaidId raidId = new RaidId(raidName, difficulty);
 
-      RaidName enumValue = EnumUtils.getByLabel(RaidName.class, pgcr.raidName());
-      raid.setIsActive(!RaidName.SUNSET_RAIDS.contains(enumValue));
+    Raid raidOptional = raidRepository.findById(raidId).orElseGet(() -> {
+      Raid raid = new Raid();
+
+      raid.setRaidId(raidId);
+      raid.setIsActive(!RaidName.SUNSET_RAIDS.contains(raidName));
 
       RaidHash raidHash = new RaidHash();
       raidHash.setRaidHash(pgcr.activityHash());
-
       raid.addRaidHash(raidHash);
+
       return raid;
     });
 
@@ -202,8 +230,86 @@ public class RaidPgcrProcessStep {
     } else {
       statsEntity.setKda(playerInformation.characterInformation().kda());
     }
-    playerInformation.characterInformation().weaponInformation().forEach(cwe -> {
 
-    });
+    List<PlayerRaidActivityWeaponStats> weaponStats = new ArrayList<>();
+    // Update weapon if any of them don't exist in DB
+    if (!CollectionUtils.isEmpty(playerInformation.characterInformation().weaponInformation())) {
+      playerInformation.characterInformation().weaponInformation().forEach(cwe -> {
+        if (!weaponRepository.existsById(cwe.weaponHash())) {
+          Weapon weapon = createWeapon(cwe);
+          weaponRepository.save(weapon);
+        }
+      });
+      weaponStats = playerInformation.characterInformation()
+          .weaponInformation().stream()
+          .map(wi -> {
+            PlayerRaidActivityWeaponStats stats = new PlayerRaidActivityWeaponStats();
+            var weaponStatsId = new PlayerRaidActivityWeaponStatsId(instanceId,
+                playerInformation.characterInformation().characterId(), wi.weaponHash());
+            stats.setPlayerRaidActivityWeaponStatsId(weaponStatsId);
+            stats.setTotalKills(wi.kills());
+            stats.setTotalPrecisionKills(wi.precisionKills());
+            if (wi.precisionRatio() == null) {
+              stats.setPrecisionRatio((double) (wi.precisionKills() / wi.kills()));
+            } else {
+              stats.setPrecisionRatio(wi.precisionRatio());
+            }
+            return stats;
+          }).toList();
+    }
+    statsEntity.setPlayerRaidActivityWeaponStats(weaponStats);
+    playerRaidActivityStatsRepository.save(statsEntity);
+  }
+
+  private void processAggregateRaidStats(ProcessedRaidPGCR pgcr,
+      PlayerInformation playerInformation, Long instanceId) {
+    RaidDifficulty difficulty = RaidDifficulty.getByLabel(pgcr.raidDifficulty());
+    RaidName raidName = EnumUtils.getByLabel(RaidName.class, pgcr.raidName());
+    RaidId raidId = new RaidId(raidName, difficulty);
+
+    Raid raid = raidRepository.findById(raidId).orElseThrow(
+        () -> new RaidNotFoundException("Raid with id [%s] not found".formatted(raidId)));
+
+    PlayerRaidAggregateStatsId statsId = new PlayerRaidAggregateStatsId(raid.getRaidId()
+        .getRaidName(), raid.getRaidId().getRaidDifficulty(), playerInformation.membershipId());
+    PlayerRaidAggregateStats aggregateStats = playerRaidAggregateStatsRepository.findById(statsId)
+        .orElseGet(() -> {
+          PlayerRaidAggregateStats stats = new PlayerRaidAggregateStats();
+          stats.setKills(playerInformation.characterInformation().kills());
+          stats.setDeaths(playerInformation.characterInformation().deaths());
+          stats.setAssists(playerInformation.characterInformation().assists());
+
+          Boolean completed = playerInformation.characterInformation().activityCompleted();
+//          Boolean fromBeginning = completed && playerInformation.characterInformation().;
+          if (completed) {
+            stats.setClears(1);
+          }
+//          if (playerInformation)
+          return null;
+        });
+  }
+
+  private Weapon createWeapon(CharacterWeaponInformation cwe) {
+    Weapon weapon = new Weapon();
+    weapon.setWeaponHash(cwe.weaponHash());
+
+    var weaponDefinition = redisTemplate.opsForValue().get(cwe.weaponHash());
+    if (weaponDefinition != null && weaponDefinition.displayProperties() != null) {
+      weapon.setWeaponIcon(BASE_URL + weaponDefinition.displayProperties().icon());
+      weapon.setWeaponName(weaponDefinition.displayProperties().name());
+    }
+
+    if (weaponDefinition != null && weaponDefinition.equipmentBlock() != null) {
+      weapon.setWeaponDamageType(EnumUtils.getByLabel(WeaponDamageType.class,
+          String.valueOf(weaponDefinition.equipmentBlock().ammoType())));
+
+      var equipmentSlot = redisTemplate.opsForValue()
+          .get(weaponDefinition.equipmentBlock().equipmentSlotTypeHash());
+      if (equipmentSlot != null && equipmentSlot.displayProperties() != null) {
+        weapon.setEquipmentSlot(
+            EquipmentSlot.findByLabel(equipmentSlot.displayProperties().name()));
+      }
+    }
+    return weapon;
   }
 }

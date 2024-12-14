@@ -66,5 +66,4 @@ public class PlayerRaidAggregateStats {
 
   @Column(name = "trio_flawless")
   private Boolean trioFlawless;
-
 }

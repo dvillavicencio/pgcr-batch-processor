@@ -5,11 +5,9 @@ import com.deahstroke.pgcrbatchprocessor.enums.RaidName;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import lombok.ToString;
 import org.hibernate.annotations.JdbcType;
 import org.hibernate.dialect.PostgreSQLEnumJdbcType;
 
@@ -18,17 +16,14 @@ import org.hibernate.dialect.PostgreSQLEnumJdbcType;
 @NoArgsConstructor
 @Getter
 @Setter
-@EqualsAndHashCode
-@ToString
-public class PlayerRaidAggregateStatsId {
+public class RaidId {
 
-  @Column(name = "raid_name")
+  @Column(name = "raid_name", columnDefinition = "raid_name")
   @JdbcType(PostgreSQLEnumJdbcType.class)
   private RaidName raidName;
 
-  @Column(name = "raid_difficulty")
+  @Column(name = "raid_difficulty", columnDefinition = "raid_difficulty")
+  @JdbcType(PostgreSQLEnumJdbcType.class)
   private RaidDifficulty raidDifficulty;
 
-  @Column(name = "player_membership_id")
-  private Long playerMembershipId;
 }

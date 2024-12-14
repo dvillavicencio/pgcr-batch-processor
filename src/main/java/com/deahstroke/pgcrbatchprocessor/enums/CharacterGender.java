@@ -2,12 +2,12 @@ package com.deahstroke.pgcrbatchprocessor.enums;
 
 import lombok.Getter;
 
+@Getter
 public enum CharacterGender implements Labeled {
-  Male("Body Type 1"),
-  Female("Body Type 2"),
-  Empty("Empty");
+  MALE("Body Type 1"),
+  FEMALE("Body Type 2"),
+  EMPTY("Empty");
 
-  @Getter
   private final String label;
 
   CharacterGender(String label) {

@@ -15,7 +15,7 @@ public class EnumUtils {
         .findFirst()
         .orElseThrow(() -> {
           String errorMessage = "No such element for label [%s] and enum class [%s]";
-          throw new NoSuchElementException(errorMessage.formatted(label, enumClazz.getName()));
+          return new NoSuchElementException(errorMessage.formatted(label, enumClazz.getName()));
         });
   }
 }

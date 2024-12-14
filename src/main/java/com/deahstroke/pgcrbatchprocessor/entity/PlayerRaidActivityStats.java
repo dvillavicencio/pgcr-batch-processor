@@ -49,6 +49,6 @@ public class PlayerRaidActivityStats {
   @Column(name = "time_played_seconds")
   private Integer timePlayedSeconds;
 
-  @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "")
+  @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY, mappedBy = "playerRaidActivityStats")
   private List<PlayerRaidActivityWeaponStats> playerRaidActivityWeaponStats;
 }

@@ -31,6 +31,9 @@ public class Weapon {
   @Column(name = "weapon_hash")
   private Long weaponHash;
 
+  @Column(name = "weapon_name")
+  private String weaponName;
+
   @Column(name = "weapon_icon")
   private String weaponIcon;
 
