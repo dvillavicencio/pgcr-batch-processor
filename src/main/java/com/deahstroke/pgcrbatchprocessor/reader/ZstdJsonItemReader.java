@@ -1,4 +1,4 @@
-package com.deahstroke.pgcrbatchprocessor.utils;
+package com.deahstroke.pgcrbatchprocessor.reader;
 
 import com.deahstroke.pgcrbatchprocessor.dto.PostGameCarnageReport;
 import com.deahstroke.pgcrbatchprocessor.exception.FileProcessingException;

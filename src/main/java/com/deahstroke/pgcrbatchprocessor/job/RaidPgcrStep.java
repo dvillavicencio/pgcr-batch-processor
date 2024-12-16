@@ -5,11 +5,10 @@ import com.deahstroke.pgcrbatchprocessor.entity.RaidPgcr;
 import com.deahstroke.pgcrbatchprocessor.exception.LineTooLargeException;
 import com.deahstroke.pgcrbatchprocessor.exception.ManifestException;
 import com.deahstroke.pgcrbatchprocessor.processor.PgcrProcessor;
-import com.deahstroke.pgcrbatchprocessor.processor.PgcrCompressingProcessor;
+import com.deahstroke.pgcrbatchprocessor.processor.CompressionProcessor;
 import com.deahstroke.pgcrbatchprocessor.repository.RaidPgcrRepository;
 import com.deahstroke.pgcrbatchprocessor.utils.CustomBufferedReaderFactory;
-import com.deahstroke.pgcrbatchprocessor.utils.CustomMultiResourcePartitioner;
-import com.deahstroke.pgcrbatchprocessor.utils.ZstdJsonItemReader;
+import com.deahstroke.pgcrbatchprocessor.reader.ZstdJsonItemReader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -189,7 +188,7 @@ public class RaidPgcrStep {
   @Bean
   public CompositeItemProcessor<PostGameCarnageReport, RaidPgcr> pgcrCompositeProcessor(
       PgcrProcessor pgcrProcessor,
-      PgcrCompressingProcessor raidPgcrCompressorProcessor) {
+      CompressionProcessor raidPgcrCompressorProcessor) {
     return new CompositeItemProcessor<>(
         pgcrProcessor, raidPgcrCompressorProcessor);
   }

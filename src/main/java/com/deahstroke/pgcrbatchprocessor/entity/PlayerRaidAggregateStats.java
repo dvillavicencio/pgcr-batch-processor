@@ -32,7 +32,7 @@ public class PlayerRaidAggregateStats {
   private Integer assists;
 
   @Column(name = "hour_played")
-  private Integer hoursPlayed;
+  private Long hoursPlayed;
 
   @Column(name = "clears")
   private Integer clears;

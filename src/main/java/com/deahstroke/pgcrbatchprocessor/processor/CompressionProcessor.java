@@ -10,11 +10,11 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.stereotype.Component;
 
 @Component
-public class PgcrCompressingProcessor implements ItemProcessor<ProcessedRaidPGCR, RaidPgcr> {
+public class CompressionProcessor implements ItemProcessor<ProcessedRaidPGCR, RaidPgcr> {
 
   private final ObjectMapper objectMapper;
 
-  public PgcrCompressingProcessor(ObjectMapper objectMapper) {
+  public CompressionProcessor(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
 
@@ -23,17 +23,19 @@ public class PgcrCompressingProcessor implements ItemProcessor<ProcessedRaidPGCR
     RaidPgcr raidPgcr = new RaidPgcr();
     raidPgcr.setInstanceId(item.instanceId());
     raidPgcr.setTimestamp(item.startTime());
+    raidPgcr.setBlob(serializeAndCompress(item));
+    return raidPgcr;
+  }
 
-    // Compress using Gzip
+  private byte[] serializeAndCompress(ProcessedRaidPGCR item) {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    try (GZIPOutputStream gzipOs = new GZIPOutputStream(baos)) {
+    try (GZIPOutputStream gzipos = new GZIPOutputStream(baos)) {
       byte[] bytes = objectMapper.writeValueAsBytes(item);
-      gzipOs.write(bytes);
-      gzipOs.finish();
+      gzipos.write(bytes);
+      gzipos.finish();
+      return bytes;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    raidPgcr.setBlob(baos.toByteArray());
-    return raidPgcr;
   }
 }

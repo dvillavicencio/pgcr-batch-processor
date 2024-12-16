@@ -3,7 +3,6 @@ package com.deahstroke.pgcrbatchprocessor.processor;
 import com.deahstroke.pgcrbatchprocessor.dto.Basic;
 import com.deahstroke.pgcrbatchprocessor.dto.CharacterAbilityInformation;
 import com.deahstroke.pgcrbatchprocessor.dto.CharacterWeaponInformation;
-import com.deahstroke.pgcrbatchprocessor.dto.ManifestResponse;
 import com.deahstroke.pgcrbatchprocessor.dto.PlayerCharacterInformation;
 import com.deahstroke.pgcrbatchprocessor.dto.PlayerInformation;
 import com.deahstroke.pgcrbatchprocessor.dto.PostGameCarnageReport;
@@ -13,9 +12,7 @@ import com.deahstroke.pgcrbatchprocessor.enums.CharacterClass;
 import com.deahstroke.pgcrbatchprocessor.enums.CharacterGender;
 import com.deahstroke.pgcrbatchprocessor.enums.CharacterRace;
 import com.deahstroke.pgcrbatchprocessor.exception.ManifestException;
-import com.deahstroke.pgcrbatchprocessor.utils.EnumUtils;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
+import com.deahstroke.pgcrbatchprocessor.service.ManifestMarshallingService;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,7 +26,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.batch.item.ItemProcessor;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 
@@ -65,21 +61,11 @@ public class PgcrProcessor implements
       2449714930L, 3446541099L, 4206123728L, 3912437239L,
       3879860661L, 3857338478L
   );
-
-  private final Counter raidPgcrCounter;
-  private final Counter nonRaidPgcrCounter;
-  private final RedisTemplate<String, ManifestResponse> redisTemplate;
+  private final ManifestMarshallingService manifestMarshallingService;
 
   public PgcrProcessor(
-      MeterRegistry meterRegistry,
-      RedisTemplate<String, ManifestResponse> redisTemplate) {
-    raidPgcrCounter = Counter.builder("raid_pgcr_count")
-        .description("Number of PGCRs that are Raid PGCRs, e.g., type 4 in the API")
-        .register(meterRegistry);
-    nonRaidPgcrCounter = Counter.builder("non_raid_pgcr_counter")
-        .description("Number of PGCRs that are non-Raid PGCRs, e.g., no type 4")
-        .register(meterRegistry);
-    this.redisTemplate = redisTemplate;
+      ManifestMarshallingService manifestMarshallingService) {
+    this.manifestMarshallingService = manifestMarshallingService;
   }
 
   /**
@@ -89,7 +75,7 @@ public class PgcrProcessor implements
    * @param item the PGCR to process
    * @return true or false
    */
-  private static Boolean resolveFromBeginning(PostGameCarnageReport item, Boolean flawless) {
+  public static Boolean resolveFromBeginning(PostGameCarnageReport item, Boolean flawless) {
     if (item.period().isAfter(SEASON_OF_HAUNTED_RELEASE)) {
       return item.activityWasStartedFromBeginning();
     } else if (item.period().isBefore(BEYOND_LIGHT_RELEASE)) {
@@ -112,10 +98,42 @@ public class PgcrProcessor implements
     }
   }
 
+  /**
+   * Get character ability information from a player PGCR entry
+   *
+   * @param entry the entry in the PGCR
+   * @return {@link CharacterAbilityInformation}
+   */
+  public static CharacterAbilityInformation getCharacterAbilityInformation(
+      PostGameCarnageReportEntry entry) {
+    int grenadeKills = 0;
+    if (Objects.nonNull(entry.extended()) &&
+        Objects.nonNull(entry.extended().values().weaponKillsGrenade())) {
+      grenadeKills = entry.extended().values().weaponKillsGrenade() instanceof Basic basic ?
+          Integer.parseInt(basic.displayValue())
+          : (Integer) entry.extended().values().weaponKillsGrenade();
+    }
+    int superKills = 0;
+    if (Objects.nonNull(entry.extended()) &&
+        Objects.nonNull(entry.extended().values().weaponKillsSuper())) {
+      superKills = entry.extended().values().weaponKillsSuper() instanceof Basic basic ?
+          Integer.parseInt(basic.displayValue())
+          : (Integer) entry.extended().values().weaponKillsSuper();
+    }
+    int meleeKills = 0;
+    if (Objects.nonNull(entry.extended()) &&
+        Objects.nonNull(entry.extended().values().weaponKillsMelee())) {
+      meleeKills = entry.extended().values().weaponKillsMelee() instanceof Basic basic ?
+          Integer.parseInt(basic.displayValue())
+          : (Integer) entry.extended().values().weaponKillsMelee();
+    }
+    return new CharacterAbilityInformation(grenadeKills,
+        meleeKills, superKills);
+  }
+
   @Override
   public ProcessedRaidPGCR process(PostGameCarnageReport item) {
     if (item.activityDetails().mode() != 4) {
-      nonRaidPgcrCounter.increment();
       return null;
     }
 
@@ -128,15 +146,15 @@ public class PgcrProcessor implements
     Long instanceId = Long.valueOf(item.activityDetails().instanceId());
 
     Long activityHash = item.activityDetails().directorActivityHash();
-    ManifestResponse manifestResponse = redisTemplate.opsForValue()
-        .get(String.valueOf(item.activityDetails().directorActivityHash()));
+    var manifestResponse = manifestMarshallingService.getManifest(
+        String.valueOf(item.activityDetails().directorActivityHash()));
 
-    if (manifestResponse == null) {
+    if (manifestResponse.isEmpty()) {
       throw new ManifestException(
           "Could not find manifest response for hash [%s]".formatted(activityHash));
     }
 
-    String[] tokens = manifestResponse.displayProperties().name().split(":");
+    String[] tokens = manifestResponse.get().displayProperties().name().split(":");
     String raidName = tokens[0].trim();
     String raidDifficulty = tokens.length > 1 ? tokens[1].trim() : "Normal";
 
@@ -144,12 +162,12 @@ public class PgcrProcessor implements
     if (!item.entries().isEmpty()) {
       players = item.entries().stream()
           .map(entry -> {
-            Long membershipId = entry.player().destinyUserInfo().membershipId();
-            Integer membershipType = entry.player().destinyUserInfo().membershipType();
-            String displayName = entry.player().destinyUserInfo().displayName();
-            String playerName = entry.player().destinyUserInfo().bungieGlobalDisplayName();
-            String playerTag = entry.player().destinyUserInfo().bungieGlobalDisplayNameCode();
-            Boolean isPublic = entry.player().destinyUserInfo().isPrivate();
+            var membershipId = entry.player().destinyUserInfo().membershipId();
+            var membershipType = entry.player().destinyUserInfo().membershipType();
+            var displayName = entry.player().destinyUserInfo().displayName();
+            var playerName = entry.player().destinyUserInfo().bungieGlobalDisplayName();
+            var playerTag = entry.player().destinyUserInfo().bungieGlobalDisplayNameCode();
+            var isPublic = entry.player().destinyUserInfo().isPublic();
 
             PlayerCharacterInformation characterInfo = createPlayerInformation(entry);
             return new PlayerInformation(membershipId, membershipType, displayName, playerName,
@@ -168,7 +186,6 @@ public class PgcrProcessor implements
     var solo = uniquePlayerCount == 1;
 
     Boolean fromBeginning = resolveFromBeginning(item, flawless);
-    raidPgcrCounter.increment();
     return new ProcessedRaidPGCR(startTime, endTime, fromBeginning,
         instanceId, raidName, raidDifficulty, activityHash, flawless, solo, duo, trio, players);
   }
@@ -177,26 +194,19 @@ public class PgcrProcessor implements
     Long characterId = entry.characterId();
     Integer lightLevel = entry.player().lightLevel();
 
-    ManifestResponse manifestClass = redisTemplate.opsForValue()
-        .get(String.valueOf(entry.player().classHash()));
-    ManifestResponse manifestGender = redisTemplate.opsForValue()
-        .get(String.valueOf(entry.player().genderHash()));
-    ManifestResponse manifestRace = redisTemplate.opsForValue()
-        .get(String.valueOf(entry.player().raceHash()));
-
-    CharacterClass characterClazz = EnumUtils.getByLabel(CharacterClass.class,
-        manifestClass == null || manifestClass.displayProperties() == null ? "Empty"
-            : manifestClass.displayProperties().name());
-    CharacterGender characterGender = EnumUtils.getByLabel(CharacterGender.class,
-        manifestGender == null || manifestGender.displayProperties() == null ? "Empty" :
-            manifestGender.displayProperties().name());
-    CharacterRace characterRace = EnumUtils.getByLabel(CharacterRace.class,
-        manifestRace == null || manifestRace.displayProperties() == null ? "Empty" :
-            manifestRace.displayProperties().name());
-
+    CharacterClass characterClazz = manifestMarshallingService.getLabeled(
+        String.valueOf(entry.player().classHash()), CharacterClass.class
+    );
+    CharacterGender characterGender = manifestMarshallingService.getLabeled(
+        String.valueOf(entry.player().genderHash()), CharacterGender.class
+    );
+    CharacterRace characterRace = manifestMarshallingService.getLabeled(
+        String.valueOf(entry.player().raceHash()), CharacterRace.class
+    );
     // Stats
     Boolean activityCompleted =
-        entry.values().completed() instanceof Basic basic && basic.value() > 0;
+        (entry.values().completed() instanceof Basic basic) ? basic.value() > 0 :
+            (Integer) entry.values().completed() > 0;
     Integer kills = (entry.values().kills() instanceof Basic basic) ?
         Integer.parseInt(basic.displayValue()) : (Integer) entry.values().kills();
     Integer deaths = (entry.values().deaths() instanceof Basic basic) ?
@@ -225,29 +235,7 @@ public class PgcrProcessor implements
           }).toList();
     }
 
-    int grenadeKills = 0;
-    if (Objects.nonNull(entry.extended()) &&
-        Objects.nonNull(entry.extended().values().weaponKillsGrenade())) {
-      grenadeKills = entry.extended().values().weaponKillsGrenade() instanceof Basic basic ?
-          Integer.parseInt(basic.displayValue())
-          : (Integer) entry.extended().values().weaponKillsGrenade();
-    }
-    int superKills = 0;
-    if (Objects.nonNull(entry.extended()) &&
-        Objects.nonNull(entry.extended().values().weaponKillsSuper())) {
-      superKills = entry.extended().values().weaponKillsSuper() instanceof Basic basic ?
-          Integer.parseInt(basic.displayValue())
-          : (Integer) entry.extended().values().weaponKillsSuper();
-    }
-    int meleeKills = 0;
-    if (Objects.nonNull(entry.extended()) &&
-        Objects.nonNull(entry.extended().values().weaponKillsMelee())) {
-      meleeKills = entry.extended().values().weaponKillsMelee() instanceof Basic basic ?
-          Integer.parseInt(basic.displayValue())
-          : (Integer) entry.extended().values().weaponKillsMelee();
-    }
-    CharacterAbilityInformation abilityInformation = new CharacterAbilityInformation(grenadeKills,
-        meleeKills, superKills);
+    var abilityInformation = getCharacterAbilityInformation(entry);
     return new PlayerCharacterInformation(characterId,
         lightLevel, characterClazz, characterRace, characterGender, entry.player().emblemHash(),
         activityCompleted, kills, assists, deaths, null, null, timePlayed, weaponInformation,

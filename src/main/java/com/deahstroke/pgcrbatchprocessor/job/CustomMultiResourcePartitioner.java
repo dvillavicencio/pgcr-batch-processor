@@ -1,4 +1,4 @@
-package com.deahstroke.pgcrbatchprocessor.utils;
+package com.deahstroke.pgcrbatchprocessor.job;
 
 import java.util.HashMap;
 import java.util.Map;

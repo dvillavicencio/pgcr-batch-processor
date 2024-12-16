@@ -5,7 +5,7 @@ public record DestinyUserInfo(
     Integer membershipType,
     Long membershipId,
     String displayName,
-    Boolean isPrivate,
+    Boolean isPublic,
     String bungieGlobalDisplayName,
     String bungieGlobalDisplayNameCode) {
 
